@@ -1,0 +1,76 @@
+# The @argszero/dsh-stdout-denial-guard bundle patch: mount and go.
+#
+# The harness classifies a sandbox denial by matching the runner's dialect against
+# stderr, and only when the command exited non-zero:
+#
+#   packages/sandbox/sandbox/src/diagnostics.ts
+#     function matchesSignature(exitCode: number | null, stderr: string, signatures: readonly string[]): boolean
+#
+#   packages/shell/bash-sandbox/src/helpers.ts
+#     export function classifyDenial(result: ShellRunResult, signatures: readonly string[]): boolean {
+#       return matchesSignature(result.exitCode, result.stderr.text, signatures)
+#     }
+#
+# The verdict lands on the result as `sandbox.denied`, and everything the model is
+# told about a denial is gated on that one boolean. `packages/shell/tool-bash/src/
+# render.ts` prints `sandboxDenialMarker(mode)` when it is set, beside the same-turn
+# escalation hint. So a program that reports the failing path on **stdout** — a Node
+# tool printing `EACCES: permission denied, mkdir '/data/config/astro'`, or any
+# command that merged the streams with `2>&1`, which agents do constantly — exits
+# non-zero with nothing on stderr the matcher knows. The denial is real, the field
+# says `false`, and the result reads as an ordinary command failure. The model,
+# told nothing, works around the sandbox instead of asking for the access it was
+# refused.
+#
+# Three places are involved and only the first decides. `matchesSignature` is
+# stderr-only; `DENIAL_SIGNATURES` in `packages/sandbox/sandbox-local/src/index.ts`
+# is module-private, so a consumer has to mirror the table; the marker and the hint
+# are produced by the render layer, which reads `sandbox.denied` and an
+# `escalationModes` argument captured in the tool's own closure.
+#
+# The seam is that the render layer is re-runnable. `tools/post-execute` is a cordis
+# waterfall whose `accept` decision may replace a successful result's **value**, and
+# the registry re-runs the tool's own output contract over the replacement:
+#
+#   packages/core/tools/src/index.ts
+#     const replaced = this.createSuccessResult(exec, tool, decision.value)   // → tool.output.render(...)
+#
+# So this plugin prints nothing. It sets the one field the renderer already reads,
+# and `tool-bash` prints `[sandbox: file access denied under <mode> mode]` in the
+# canonical position, ahead of the exit marker `parseExitStatus` anchors on. What it
+# cannot reach that way is the escalation hint, gated on a render *argument* — that
+# one line travels as `additionalContexts`, the decision's public channel for
+# context a renderer cannot produce.
+#
+# Whether escalation is advertised is not guessed. tool-bash spreads
+# `sandbox_permissions` and `justification` into its parameter spec only when its
+# `escalationModes` is non-empty, so the parameter's presence in the registered
+# definition **is** "escalation is available in this composition". The plugin reads
+# it off `parameters.properties` — the normalized shape `defineTool` stores after
+# `parameterSchemaSpecToJsonSchema` — and attaches the hint exactly when the harness
+# would have.
+#
+# The guard fails open and stands down in the two cases where acting would be worse
+# than missing a marker: an inner listener blocked the call (un-blocking it to add a
+# marker is a far worse bug than a missed marker), and an inner `accept` already
+# carries `content` (a decision cannot carry both `value` and `content`, and a spill
+# replaced the content so the model would not read this result verbatim).
+#
+# `mode: 'mark'` (the default) re-classifies and restores the marker. `report`
+# counts and logs the same denial and writes nothing, which is how a deployment
+# measures how often its runner reports on stdout before trusting a repair; `off`
+# installs no listener and still registers the report tool, whose job in that
+# posture is to say that the guard is off. Counters — including the denominator, so
+# "no denials" can be told apart from "never ran" — and the retained events are read
+# back with the `stdout_denial_report` tool.
+#
+# The two value imports — `createUserMessage` from @deepseek-ai/dsh-llm and
+# `defineTool` from @deepseek-ai/dsh-tools — are declared as peers rather than
+# dependencies on purpose: a `dependencies` entry is how a plugin ends up in a
+# `profile` deployment with its own copy of the registry's package, a second
+# evaluation whose symbols are equal to nothing the host holds, a failure this
+# repository has already shipped more than once.
+
+- insert:
+    - id: stdout-denial-guard
+      name: '@argszero/dsh-stdout-denial-guard'

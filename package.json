@@ -1,0 +1,82 @@
+{
+  "name": "@argszero/dsh-stdout-denial-guard",
+  "description": "Classifies sandbox denials the harness reports on stdout. The harness matches each runner's denial dialect against stderr only, so a program that prints its failing path on stdout - or any command that merged the streams with 2>&1 - exits non-zero with no recognizable stderr: sandbox.denied stays false and the model is never told it was denied, so it works around the sandbox instead of asking for the access. This plugin re-classifies from the value the tool returned, and sets the one field the tool's own renderer reads, so the canonical marker appears in the canonical position and the escalation hint rides the decision's additionalContexts exactly when the tool advertises escalation. Zero runtime dependencies, no sandbox changes, fail-open when its own work errors.",
+  "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/**/*.js",
+    "lib/types/**/*.d.ts",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/argszero/dsh-stdout-denial-guard.git"
+  },
+  "homepage": "https://github.com/argszero/dsh-stdout-denial-guard#readme",
+  "bugs": {
+    "url": "https://github.com/argszero/dsh-stdout-denial-guard/issues"
+  },
+  "keywords": [
+    "cordis",
+    "deepseek-harness",
+    "dsh",
+    "plugin",
+    "sandbox",
+    "denial",
+    "landlock",
+    "bwrap",
+    "seatbelt",
+    "stdout",
+    "diagnostics",
+    "escalation"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-llm": ">=0.1.7-rc.1 <0.2.0 || >=0.2.0-rc.2 <0.3.0",
+    "@deepseek-ai/dsh-sandbox": ">=0.1.7-rc.1 <0.2.0 || >=0.2.0-rc.2 <0.3.0",
+    "@deepseek-ai/dsh-tools": ">=0.1.7-rc.1 <0.2.0 || >=0.2.0-rc.2 <0.3.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-agent": "^0.1.7-rc.1",
+    "@deepseek-ai/dsh-llm": "^0.1.7-rc.1",
+    "@deepseek-ai/dsh-sandbox": "^0.1.7-rc.1",
+    "@deepseek-ai/dsh-session": "^0.1.7-rc.1",
+    "@deepseek-ai/dsh-system-prompt": "^0.1.7-rc.1",
+    "@deepseek-ai/dsh-tools": "^0.1.7-rc.1",
+    "@types/node": "^24.19.1",
+    "semver": "^7.8.5",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "build": "tsc",
+    "pretest": "tsc",
+    "test": "node --test \"test/*.spec.mjs\"",
+    "test:inject": "node scripts/inject-defects.mjs",
+    "test:probe-lines": "node scripts/probe-lines.mjs",
+    "prepublishOnly": "tsc"
+  },
+  "engines": {
+    "node": "^22.19 || >=24"
+  }
+}
